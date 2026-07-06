@@ -1,9 +1,15 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AIREX AIL CARGO — Invoice Studio</title>
+<title>AIREX RAIL CARGO — Invoice Studio</title>
+
+<!-- html2canvas + jsPDF for PDF generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 <style>
 :root{
   --navy:#132a4c;
@@ -51,6 +57,7 @@ input,select,textarea{font-family:inherit;}
   top:0;
   height:100vh;
   z-index:40;
+  transition:width 0.1s ease;
 }
 .brand{
   padding:22px 20px 16px;
@@ -98,6 +105,33 @@ input,select,textarea{font-family:inherit;}
   font-size:11px;
   color:#7f92ab;
   border-top:1px solid rgba(255,255,255,0.1);
+}
+
+/* Sidebar resize handle */
+.sidebar-resize-handle{
+  width:6px;
+  background:transparent;
+  cursor:col-resize;
+  flex-shrink:0;
+  position:relative;
+  z-index:50;
+  transition:background 0.15s;
+}
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle.active{
+  background:var(--steel);
+}
+.sidebar-resize-handle::after{
+  content:'';
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%, -50%);
+  width:2px;
+  height:40px;
+  background:var(--line);
+  border-radius:2px;
+  opacity:0.5;
 }
 
 /* Main area */
@@ -149,7 +183,7 @@ input,select,textarea{font-family:inherit;}
 /* ---------- EDITOR LAYOUT ---------- */
 .editor-grid{
   display:grid;
-  grid-template-columns:minmax(340px,430px) 1fr;
+  grid-template-columns:minmax(950px,430px) 1fr;
   gap:22px;
   align-items:start;
 }
@@ -230,10 +264,41 @@ table.rows-table input{
 }
 .add-row-btn:hover{background:#eaf0f6;}
 
+/* Totals summary panel */
+.totals-summary{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:6px 18px;
+  font-size:14px;
+  font-weight:600;
+  padding:10px 0 4px;
+  border-top:1px solid var(--line);
+  margin-top:12px;
+}
+.totals-summary .ts-item{
+  display:flex;
+  justify-content:space-between;
+  padding:4px 0;
+}
+.totals-summary .ts-label{
+  color:var(--muted);
+  font-weight:500;
+  font-size:13px;
+}
+.totals-summary .ts-value{
+  font-weight:700;
+  color:var(--navy-deep);
+}
+.totals-summary .grand .ts-value{
+  color:var(--amber);
+  font-size:16px;
+}
+
 /* buttons */
 .btn{
   border:none;border-radius:8px;padding:10px 16px;font-size:13.5px;font-weight:600;
   display:inline-flex;align-items:center;gap:7px;
+  transition:all .15s ease;
 }
 .btn-primary{background:var(--navy);color:#fff;}
 .btn-primary:hover{background:var(--navy-deep);}
@@ -243,8 +308,12 @@ table.rows-table input{
 .btn-ghost:hover{background:var(--floor);}
 .btn-danger{background:#fff;color:var(--danger);border:1px solid #f0c6c3;}
 .btn-danger:hover{background:#fdecec;}
+.btn-success{background:var(--ok);color:#fff;}
+.btn-success:hover{background:#15653b;}
 .btn-sm{padding:6px 10px;font-size:12px;border-radius:6px;}
+.btn-xs{padding:4px 8px;font-size:10.5px;border-radius:5px;}
 .actions-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+.actions-row .btn{flex:0 1 auto;}
 
 /* signature tabs */
 .sig-tabs{display:flex;gap:6px;margin-bottom:10px;}
@@ -270,8 +339,48 @@ canvas#sigCanvas{
   border-radius:var(--radius);
   padding:22px;
   display:flex;
-  justify-content:center;
+  flex-direction:column;
+  align-items:center;
   overflow-x:auto;
+}
+.zoom-controls{
+  display:flex;
+  gap:6px;
+  margin-bottom:12px;
+  align-self:flex-start;
+  background:var(--paper);
+  padding:6px 8px;
+  border-radius:8px;
+  border:1px solid var(--line);
+}
+.zoom-controls button{
+  background:var(--floor);
+  border:1px solid var(--line);
+  border-radius:5px;
+  padding:4px 10px;
+  font-size:12px;
+  font-weight:600;
+  color:var(--navy);
+}
+.zoom-controls button:hover{
+  background:var(--steel);
+  color:#fff;
+  border-color:var(--steel);
+}
+.zoom-controls .zoom-level{
+  font-size:12px;
+  font-weight:700;
+  padding:4px 8px;
+  color:var(--navy-deep);
+  min-width:48px;
+  text-align:center;
+}
+.zoom-container{
+  width:100%;
+  display:flex;
+  justify-content:center;
+  transition:transform 0.2s ease;
+  transform-origin:top center;
 }
 .invoice-page{
   width:210mm;
@@ -419,6 +528,8 @@ table.list-table tr:last-child td{border-bottom:none;}
   .mobile-preview-toggle{display:flex;}
   #formPanelWrap.mobile-hide{display:none;}
   #previewPanelWrap.mobile-hide{display:none;}
+  .sidebar-resize-handle{display:none;}
+  .totals-summary{grid-template-columns:1fr 1fr;}
 }
 
 @media (max-width:760px){
@@ -433,6 +544,7 @@ table.list-table tr:last-child td{border-bottom:none;}
   .two-col,.three-col{grid-template-columns:1fr;}
   .invoice-page{transform-origin:top left;}
   .preview-shell{padding:10px;}
+  .totals-summary{grid-template-columns:1fr 1fr;}
 }
 .sidebar-backdrop{
   display:none;position:fixed;inset:0;background:rgba(10,15,25,0.45);z-index:39;
@@ -440,13 +552,45 @@ table.list-table tr:last-child td{border-bottom:none;}
 .sidebar-backdrop.show{display:block;}
 
 /* ---------- PRINT ---------- */
-@media print{
-  body *{visibility:hidden;}
-  .invoice-page, .invoice-page *{visibility:visible;}
-  .invoice-page{
-    position:absolute;top:0;left:0;width:210mm;min-height:297mm;box-shadow:none;padding:8mm 9mm;margin:0;
+@media print {
+  body, .app-shell, .main, .view, .editor-grid, #previewPanelWrap, .preview-shell {
+    display: block !important;
+    visibility: visible !important;
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
   }
-  @page{size:A4;margin:0;}
+  .sidebar, .topbar, .mobile-preview-toggle, .panel, .actions-row,
+  .nav, .sidebar-foot, .stats-row, #toast, .hamburger, .sidebar-backdrop,
+  .preview-overlay, #formPanelWrap, .add-row-btn, .rows-wrap, .field, .hint,
+  .zoom-controls, .sidebar-resize-handle {
+    display: none !important;
+  }
+  .invoice-page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 210mm;
+    min-height: 297mm;
+    box-shadow: none;
+    padding: 8mm 9mm;
+    margin: 0;
+    background: #fff !important;
+    visibility: visible !important;
+    display: block !important;
+    z-index: 9999;
+    border: none !important;
+  }
+  .invoice-page * {
+    visibility: visible !important;
+  }
+  @page {
+    size: A4;
+    margin: 0;
+  }
 }
 </style>
 </head>
@@ -462,7 +606,7 @@ table.list-table tr:last-child td{border-bottom:none;}
       <div class="brand-mark">
         <div class="logo-chip">ARC</div>
         <div>
-          <div class="brand-title">AIREX AIL CARGO</div>
+          <div class="brand-title">AIREX RAIL CARGO</div>
           <div class="brand-sub">Invoice Studio</div>
         </div>
       </div>
@@ -474,6 +618,9 @@ table.list-table tr:last-child td{border-bottom:none;}
     </nav>
     <div class="sidebar-foot">GST Tax Invoice Generator<br/>A4 · Print Ready · Offline</div>
   </aside>
+
+  <!-- Sidebar Resize Handle -->
+  <div class="sidebar-resize-handle" id="sidebarResizeHandle" title="Drag to resize sidebar"></div>
 
   <!-- MAIN -->
   <div class="main">
@@ -535,7 +682,7 @@ table.list-table tr:last-child td{border-bottom:none;}
           </div>
 
           <div class="panel">
-            <h2>Shipment / Charges<span></span></h2>
+            <h2>Shipment / Charges</h2>
             <div class="rows-wrap">
               <table class="rows-table" id="rowsTable">
                 <thead>
@@ -550,6 +697,16 @@ table.list-table tr:last-child td{border-bottom:none;}
             </div>
             <button class="add-row-btn" id="addRowBtn">+ Add Row</button>
             <div class="hint">Net Amount = Charge Weight × Rate/Kg. GST amounts auto-calculate from the % you enter. Use IGST for interstate, or CGST+SGST for intrastate — not both.</div>
+
+            <!-- Totals Summary -->
+            <div class="totals-summary" id="totalsSummary">
+              <div class="ts-item"><span class="ts-label">Subtotal</span><span class="ts-value" id="tsSubtotal">₹ 0.00</span></div>
+              <div class="ts-item"><span class="ts-label">CGST</span><span class="ts-value" id="tsCgst">₹ 0.00</span></div>
+              <div class="ts-item"><span class="ts-label">SGST</span><span class="ts-value" id="tsSgst">₹ 0.00</span></div>
+              <div class="ts-item"><span class="ts-label">IGST</span><span class="ts-value" id="tsIgst">₹ 0.00</span></div>
+              <div class="ts-item"><span class="ts-label">Round Off</span><span class="ts-value" id="tsRoundOff">₹ 0.00</span></div>
+              <div class="ts-item grand"><span class="ts-label">Grand Total</span><span class="ts-value" id="tsGrandTotal">₹ 0.00</span></div>
+            </div>
           </div>
 
           <div class="panel">
@@ -583,7 +740,8 @@ table.list-table tr:last-child td{border-bottom:none;}
           <div class="panel">
             <div class="actions-row">
               <button class="btn btn-primary" id="saveBtn">💾 Save Invoice</button>
-              <button class="btn btn-amber" id="printBtn">🖨 Print / Save PDF</button>
+              <button class="btn btn-amber" id="pdfBtn">⬇ Download PDF</button>
+              <button class="btn btn-amber" id="printBtn">🖨 Print</button>
               <button class="btn btn-ghost" id="resetBtn">↺ Reset Form</button>
             </div>
           </div>
@@ -593,8 +751,16 @@ table.list-table tr:last-child td{border-bottom:none;}
         <!-- PREVIEW -->
         <div id="previewPanelWrap" class="mobile-hide">
           <div class="preview-shell">
-            <div class="invoice-page" id="invoicePage">
-              <!-- rendered by JS -->
+            <div class="zoom-controls">
+              <button id="zoomOutBtn" title="Zoom Out">−</button>
+              <span class="zoom-level" id="zoomLevel">100%</span>
+              <button id="zoomInBtn" title="Zoom In">+</button>
+              <button id="zoomResetBtn" title="Reset to 100%">100%</button>
+            </div>
+            <div class="zoom-container" id="zoomContainer">
+              <div class="invoice-page" id="invoicePage">
+                <!-- rendered by JS -->
+              </div>
             </div>
           </div>
         </div>
@@ -607,11 +773,12 @@ table.list-table tr:last-child td{border-bottom:none;}
       <div class="saved-toolbar">
         <input class="search-box" id="searchInput" placeholder="Search by invoice no, receiver, consignee…" />
         <button class="btn btn-primary btn-sm" id="newFromListBtn">+ New Invoice</button>
+        <button class="btn btn-success btn-sm" id="exportCsvBtn">📥 Export CSV</button>
       </div>
       <div class="table-card">
         <table class="list-table" id="listTable">
           <thead>
-            <tr><th>Invoice No</th><th>Date</th><th>Receiver</th><th>Route</th><th>Grand Total</th><th></th></tr>
+            <tr><th>Invoice No</th><th>Date</th><th>Receiver</th><th>Route</th><th>Grand Total</th><th>Actions</th></tr>
           </thead>
           <tbody id="listBody"></tbody>
         </table>
@@ -673,18 +840,19 @@ table.list-table tr:last-child td{border-bottom:none;}
 <div id="toast"></div>
 
 <script>
-/* ===================== AIREX AIL CARGO — Invoice Studio =====================
-   Self-contained billing app: no server, no build step.
-   Data persists in the browser via localStorage.
-================================================================================ */
+/* =====================================================================
+   AIREX RAIL CARGO — Invoice Studio
+   Features: CRUD, PDF, CSV, Zoom, Sidebar Resize, Live Totals
+===================================================================== */
 
 const LS_SETTINGS = 'airex_settings_v1';
 const LS_INVOICES = 'airex_invoices_v1';
 const LS_SEQ      = 'airex_seq_v1';
+const LS_SIDEBAR_W = 'airex_sidebar_w';
 
 const DEFAULT_SETTINGS = {
   logo: '',
-  name: 'AIREX AIL CARGO',
+  name: 'AIREX RAIL CARGO',
   tagline: 'A Complete Logistic Solution by Air, Rail & Road',
   iso: 'ISO 9001:2015 Certified',
   address: 'T-17-A, Third Floor, Indiabulls Mall, Nr. Jetalpur Bridge, Jetalpur, Vadodara – 390020',
@@ -694,7 +862,7 @@ const DEFAULT_SETTINGS = {
   gst: '24AGBPA5882F1ZQ',
   sac: '996512',
   udyam: 'UDYAM-GJ-24-0053687',
-  payee: 'AIREX AIL CARGO',
+  payee: 'AIREX RAIL CARGO',
   bank: '',
   acc: '',
   ifsc: '',
@@ -703,10 +871,10 @@ const DEFAULT_SETTINGS = {
 
 let settings = loadSettings();
 let invoices = loadInvoices();
-let currentSig = { mode: 'draw', dataUrl: '' }; // mode: draw | upload | none
-let currentInvoiceId = null; // set when editing a saved invoice
+let currentSig = { mode: 'draw', dataUrl: '' };
+let currentInvoiceId = null;
 
-/* ---------------- persistence helpers ---------------- */
+/* ---------------- persistence ---------------- */
 function loadSettings(){
   try{
     const raw = localStorage.getItem(LS_SETTINGS);
@@ -730,7 +898,17 @@ function nextSeq(){
   return seq;
 }
 
-/* ---------------- number → words (Indian system) ---------------- */
+function loadSidebarWidth(){
+  try{
+    const w = localStorage.getItem(LS_SIDEBAR_W);
+    return w ? parseInt(w,10) : null;
+  }catch(e){ return null; }
+}
+function saveSidebarWidth(w){
+  localStorage.setItem(LS_SIDEBAR_W, String(w));
+}
+
+/* ---------------- number → words ---------------- */
 function numberToWords(num){
   num = Math.round(num);
   if(num === 0) return 'Zero';
@@ -767,7 +945,7 @@ function amountInWords(amount){
   return 'Rupees ' + numberToWords(rupees) + ' Only';
 }
 
-/* ---------------- line items state ---------------- */
+/* ---------------- line items ---------------- */
 let rows = [];
 function blankRow(){
   return { lr:'', pdate:'', pkgs:'', wt:'', rate:'', cgstp:'', sgstp:'', igstp:'' };
@@ -775,12 +953,14 @@ function blankRow(){
 function addRow(data){
   rows.push(data || blankRow());
   renderRowsTable();
+  updateTotalsSummary();
   renderPreview();
 }
 function removeRow(idx){
   rows.splice(idx,1);
   if(rows.length===0) rows.push(blankRow());
   renderRowsTable();
+  updateTotalsSummary();
   renderPreview();
 }
 function calcRow(r){
@@ -815,12 +995,12 @@ function renderRowsTable(){
     `;
     tbody.appendChild(tr);
   });
-  // wire inputs
   tbody.querySelectorAll('input').forEach(inp=>{
     inp.addEventListener('input', (e)=>{
       const idx = +e.target.dataset.idx;
       const f = e.target.dataset.f;
       rows[idx][f] = e.target.value;
+      updateTotalsSummary();
       renderPreview();
     });
   });
@@ -877,6 +1057,16 @@ function computeTotals(){
   const rounded = Math.round(rawTotal);
   const roundOff = rounded - rawTotal;
   return { subtotal, cgst, sgst, igst, roundOff, grandTotal: rounded };
+}
+
+function updateTotalsSummary(){
+  const t = computeTotals();
+  document.getElementById('tsSubtotal').textContent = '₹ ' + fmt(t.subtotal);
+  document.getElementById('tsCgst').textContent = '₹ ' + fmt(t.cgst);
+  document.getElementById('tsSgst').textContent = '₹ ' + fmt(t.sgst);
+  document.getElementById('tsIgst').textContent = '₹ ' + fmt(t.igst);
+  document.getElementById('tsRoundOff').textContent = '₹ ' + fmt(t.roundOff);
+  document.getElementById('tsGrandTotal').textContent = '₹ ' + fmt(t.grandTotal);
 }
 
 /* ---------------- RENDER PREVIEW ---------------- */
@@ -1077,7 +1267,7 @@ function setSigMode(mode){
   renderPreview();
 }
 
-/* ---------------- SAVE / LOAD INVOICES ---------------- */
+/* ---------------- SAVE / LOAD / DELETE ---------------- */
 function saveInvoice(){
   const d = getFormData();
   if(!d.rname && rows.every(r=>!r.lr && !r.wt)){
@@ -1096,6 +1286,7 @@ function saveInvoice(){
   currentInvoiceId = record.id;
   saveInvoicesToStorage();
   renderStats();
+  renderList(document.getElementById('searchInput').value);
   toast('Invoice saved ✓');
 }
 
@@ -1119,6 +1310,7 @@ function loadInvoiceIntoForm(inv){
   currentSig = inv.sig ? {...inv.sig} : {mode:'none', dataUrl:''};
   setSigMode(currentSig.mode);
   renderRowsTable();
+  updateTotalsSummary();
   renderPreview();
   switchView('editor');
 }
@@ -1127,7 +1319,7 @@ function deleteInvoice(id){
   if(!confirm('Delete this invoice? This cannot be undone.')) return;
   invoices = invoices.filter(x=>x.id!==id);
   saveInvoicesToStorage();
-  renderList();
+  renderList(document.getElementById('searchInput').value);
   renderStats();
   toast('Invoice deleted');
 }
@@ -1157,9 +1349,10 @@ function renderList(filter){
       <td>${escapeHtml(inv.rname)||'—'}</td>
       <td>${escapeHtml(inv.origin)||'—'} → ${escapeHtml(inv.destination)||'—'}</td>
       <td><span class="pill">₹ ${fmt(inv.totals? inv.totals.grandTotal:0)}</span></td>
-      <td style="white-space:nowrap;">
-        <button class="btn btn-ghost btn-sm" data-load="${inv.id}">Open</button>
-        <button class="btn btn-danger btn-sm" data-del2="${inv.id}">Delete</button>
+      <td style="white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-xs" data-load="${inv.id}">Open</button>
+        <button class="btn btn-amber btn-xs" data-pdf="${inv.id}">PDF</button>
+        <button class="btn btn-danger btn-xs" data-del2="${inv.id}">Del</button>
       </td>
     </tr>
   `).join('');
@@ -1168,6 +1361,10 @@ function renderList(filter){
     if(inv) loadInvoiceIntoForm(inv);
   }));
   body.querySelectorAll('[data-del2]').forEach(b=>b.addEventListener('click', ()=> deleteInvoice(b.dataset.del2)));
+  body.querySelectorAll('[data-pdf]').forEach(b=>b.addEventListener('click', ()=>{
+    const inv = invoices.find(x=>x.id===b.dataset.pdf);
+    if(inv) downloadPDFForInvoice(inv);
+  }));
 }
 
 function renderStats(){
@@ -1261,7 +1458,7 @@ function closeSidebarMobile(){
 function genInvoiceNumber(dateStr){
   const d = dateStr ? new Date(dateStr) : new Date();
   const y = d.getFullYear();
-  const fyStart = d.getMonth()>=3 ? y : y-1; // April = month 3
+  const fyStart = d.getMonth()>=3 ? y : y-1;
   const fyStr = String(fyStart%100).padStart(2,'0') + String((fyStart+1)%100).padStart(2,'0');
   const seq = nextSeq();
   return `ARC/${fyStr}/${String(seq).padStart(4,'0')}`;
@@ -1285,23 +1482,343 @@ function resetForm(){
   if(sigCtx) sigCtx.clearRect(0,0,canvas.width,canvas.height);
   document.getElementById('sigUploadPreview').innerHTML = 'No image selected';
   renderRowsTable();
+  updateTotalsSummary();
   renderPreview();
+  toast('Form reset');
 }
 
-/* ---------------- INIT / EVENT WIRING ---------------- */
+/* ---------------- ZOOM CONTROLS ---------------- */
+let zoomLevel = 1;
+function updateZoom(level){
+  zoomLevel = Math.min(Math.max(level, 0.5), 2.0);
+  document.getElementById('zoomContainer').style.transform = `scale(${zoomLevel})`;
+  document.getElementById('zoomLevel').textContent = Math.round(zoomLevel * 100) + '%';
+  // Save zoom preference
+  try{ localStorage.setItem('airex_zoom', String(zoomLevel)); }catch(e){}
+}
+function initZoom(){
+  try{
+    const saved = localStorage.getItem('airex_zoom');
+    if(saved) zoomLevel = parseFloat(saved);
+    if(zoomLevel<0.5 || zoomLevel>2) zoomLevel = 1;
+  }catch(e){ zoomLevel = 1; }
+  updateZoom(zoomLevel);
+}
+
+/* ---------------- SIDEBAR RESIZE ---------------- */
+function initSidebarResize(){
+  const handle = document.getElementById('sidebarResizeHandle');
+  const sidebar = document.getElementById('sidebar');
+  let isResizing = false;
+  let startX, startWidth;
+
+  const savedWidth = loadSidebarWidth();
+  if(savedWidth && savedWidth >= 150 && savedWidth <= 400){
+    sidebar.style.width = savedWidth + 'px';
+    document.documentElement.style.setProperty('--sidebar-w', savedWidth + 'px');
+  }
+
+  handle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    startWidth = sidebar.offsetWidth;
+    handle.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if(!isResizing) return;
+    const diff = e.clientX - startX;
+    let newWidth = startWidth + diff;
+    newWidth = Math.min(Math.max(newWidth, 150), 400);
+    sidebar.style.width = newWidth + 'px';
+    document.documentElement.style.setProperty('--sidebar-w', newWidth + 'px');
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if(!isResizing) return;
+    isResizing = false;
+    handle.classList.remove('active');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    // Save width
+    const w = sidebar.offsetWidth;
+    saveSidebarWidth(w);
+  });
+}
+
+/* ---------------- PDF GENERATION ---------------- */
+function generatePDFBlob(invoiceData) {
+  return new Promise((resolve, reject) => {
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '210mm';
+    container.style.background = '#fff';
+    container.style.zIndex = '-1';
+    container.style.opacity = '0';
+    container.style.pointerEvents = 'none';
+    container.style.transform = 'scale(0.5)';
+    container.style.transformOrigin = 'top left';
+    document.body.appendChild(container);
+
+    const d = invoiceData;
+    const t = invoiceData.totals || computeTotals();
+    const logoHtml = settings.logo ? `<img src="${settings.logo}" alt="logo"/>` : `AIREX<br/>LOGO`;
+    const rowsHtml = (d.rows || []).map((r, i) => {
+      const c = calcRow(r);
+      return `<tr>
+        <td>${i+1}</td>
+        <td class="al">${escapeHtml(r.lr)}</td>
+        <td>${r.pdate ? formatDate(r.pdate) : ''}</td>
+        <td>${escapeHtml(r.pkgs)}</td>
+        <td>${r.wt ? fmt(+r.wt) : ''}</td>
+        <td>${r.rate ? fmt(+r.rate) : ''}</td>
+        <td>${fmt(c.net)}</td>
+        <td>${r.cgstp || 0}%</td>
+        <td>${r.sgstp || 0}%</td>
+        <td>${r.igstp || 0}%</td>
+      </tr>`;
+    }).join('');
+    let sigHtml = '';
+    if (d.sig && d.sig.mode !== 'none' && d.sig.dataUrl) {
+      sigHtml = `<img src="${d.sig.dataUrl}" alt="signature"/>`;
+    }
+    const termsLines = (d.terms || '').split('\n').filter(x => x.trim() !== '');
+    const termsHtml = termsLines.map(l => `<li>${escapeHtml(l.replace(/^\d+\.\s*/, ''))}</li>`).join('');
+
+    const html = `
+    <div class="inv-outer-border" style="border:1.6px solid #000;padding:6px;height:100%;">
+      <div class="inv-header" style="display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding-bottom:6px;border-bottom:1.6px solid #000;">
+        <div class="inv-header-logo" style="width:64px;height:64px;border:1px solid #000;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:9px;color:#999;text-align:center;background:#fafafa;">${logoHtml}</div>
+        <div>
+          <div class="company-name" style="font-size:20px;font-weight:800;letter-spacing:.03em;text-align:center;">${escapeHtml(settings.name)}</div>
+          <div class="tagline" style="font-size:10.5px;font-style:italic;text-align:center;color:#222;">${escapeHtml(settings.tagline)}</div>
+          <div class="iso-line" style="font-size:9.5px;text-align:center;font-weight:700;margin-top:1px;">${escapeHtml(settings.iso)}</div>
+          <div class="addr-line" style="font-size:9.5px;text-align:center;margin-top:2px;">${escapeHtml(settings.address)}</div>
+          <div class="contact-line" style="font-size:9.5px;text-align:center;">Mob: ${escapeHtml(settings.mobile)} &nbsp;|&nbsp; Email: ${escapeHtml(settings.email)} &nbsp;|&nbsp; Web: ${escapeHtml(settings.website)}</div>
+        </div>
+        <div class="inv-header-gst" style="font-size:10px;font-weight:700;text-align:right;white-space:nowrap;">
+          <div>GSTIN:</div>
+          <div>${escapeHtml(settings.gst)}</div>
+        </div>
+      </div>
+      <div class="inv-title-bar" style="text-align:center;font-size:14px;font-weight:800;letter-spacing:.15em;padding:5px 0;border-bottom:1.6px solid #000;background:#f1f1f1;">TAX INVOICE</div>
+      <div class="inv-info-grid" style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1.6px solid #000;">
+        <div class="info-box left" style="padding:6px 8px;font-size:10px;border-right:1.2px solid #000;">
+          <div class="info-box-title" style="font-weight:700;text-decoration:underline;margin-bottom:4px;font-size:10px;">Receiver Details (Bill To)</div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Name</div><div class="v" style="flex:1;">: ${escapeHtml(d.rname)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Address</div><div class="v" style="flex:1;">: ${escapeHtml(d.raddr)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">GSTIN</div><div class="v" style="flex:1;">: ${escapeHtml(d.rgstin)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">State</div><div class="v" style="flex:1;">: ${escapeHtml(d.rstate)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">PIN Code</div><div class="v" style="flex:1;">: ${escapeHtml(d.rpin)}</div></div>
+        </div>
+        <div class="info-box" style="padding:6px 8px;font-size:10px;">
+          <div class="info-box-title" style="font-weight:700;text-decoration:underline;margin-bottom:4px;font-size:10px;">Invoice Information</div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Invoice No.</div><div class="v" style="flex:1;">: ${escapeHtml(d.invno)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Invoice Date</div><div class="v" style="flex:1;">: ${d.date ? formatDate(d.date) : ''}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Consignor</div><div class="v" style="flex:1;">: ${escapeHtml(d.consignor)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Consignee</div><div class="v" style="flex:1;">: ${escapeHtml(d.consignee)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Mode of Transport</div><div class="v" style="flex:1;">: ${escapeHtml(d.mode)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Origin</div><div class="v" style="flex:1;">: ${escapeHtml(d.origin)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Destination</div><div class="v" style="flex:1;">: ${escapeHtml(d.destination)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Vehicle/Railway No.</div><div class="v" style="flex:1;">: ${escapeHtml(d.vehicle)}</div></div>
+        </div>
+      </div>
+      <table class="items-table" style="width:100%;border-collapse:collapse;font-size:9.3px;margin-top:0;">
+        <thead>
+          <tr>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">Sr</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">LR/DC No</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">Pickup<br/>Date</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">Pkgs</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">Chg Wt<br/>(Kg)</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">Rate/<br/>Kg</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">Net<br/>Amount</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">CGST<br/>%</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">SGST<br/>%</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#eee;font-weight:700;text-align:center;">IGST<br/>%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml || `<tr><td colspan="10" style="color:#888;border:1px solid #000;padding:3px 3px;text-align:center;">No items added</td></tr>`}
+        </tbody>
+      </table>
+      <div class="post-table-row" style="display:grid;grid-template-columns:1.15fr 1fr;border:1px solid #000;border-top:none;">
+        <div class="bank-box" style="padding:6px 8px;border-right:1.2px solid #000;font-size:9.6px;">
+          <div class="info-box-title" style="font-weight:700;text-decoration:underline;margin-bottom:4px;font-size:10px;">Bank Details</div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">GST No.</div><div class="v" style="flex:1;">: ${escapeHtml(settings.gst)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">SAC Code</div><div class="v" style="flex:1;">: ${escapeHtml(settings.sac)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Payee Name</div><div class="v" style="flex:1;">: ${escapeHtml(settings.payee)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Bank Name</div><div class="v" style="flex:1;">: ${escapeHtml(settings.bank)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Account No.</div><div class="v" style="flex:1;">: ${escapeHtml(settings.acc)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">IFSC Code</div><div class="v" style="flex:1;">: ${escapeHtml(settings.ifsc)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">Branch</div><div class="v" style="flex:1;">: ${escapeHtml(settings.branch)}</div></div>
+          <div class="kv-line" style="display:flex;margin-bottom:2px;"><div class="k" style="width:118px;flex-shrink:0;font-weight:600;">UDYAM No.</div><div class="v" style="flex:1;">: ${escapeHtml(settings.udyam)}</div></div>
+        </div>
+        <div class="totals-box" style="padding:0;font-size:10px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td class="tl" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:left;">Subtotal</td><td class="tr" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:right;font-weight:600;width:110px;">₹ ${fmt(t.subtotal)}</td></tr>
+            <tr><td class="tl" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:left;">CGST</td><td class="tr" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:right;font-weight:600;width:110px;">₹ ${fmt(t.cgst)}</td></tr>
+            <tr><td class="tl" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:left;">SGST</td><td class="tr" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:right;font-weight:600;width:110px;">₹ ${fmt(t.sgst)}</td></tr>
+            <tr><td class="tl" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:left;">IGST</td><td class="tr" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:right;font-weight:600;width:110px;">₹ ${fmt(t.igst)}</td></tr>
+            <tr><td class="tl" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:left;">Round Off</td><td class="tr" style="padding:3.5px 8px;border-bottom:1px solid #ccc;text-align:right;font-weight:600;width:110px;">₹ ${fmt(t.roundOff)}</td></tr>
+            <tr class="grand"><td class="tl" style="padding:3.5px 8px;border-top:1.4px solid #000;border-bottom:none;text-align:left;font-weight:800;font-size:11.5px;background:#f1f1f1;">Grand Total</td><td class="tr" style="padding:3.5px 8px;border-top:1.4px solid #000;border-bottom:none;text-align:right;font-weight:800;font-size:11.5px;background:#f1f1f1;width:110px;">₹ ${fmt(t.grandTotal)}</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="amount-words" style="border:1px solid #000;border-top:none;padding:5px 8px;font-size:10px;font-weight:600;">Amount in Words: ${amountInWords(t.grandTotal)}</div>
+      <div class="footer-grid" style="display:grid;grid-template-columns:1.3fr 1fr;border:1px solid #000;border-top:none;min-height:100px;">
+        <div class="terms-box" style="padding:6px 8px;border-right:1.2px solid #000;font-size:9px;color:#222;">
+          <div class="info-box-title" style="font-weight:700;text-decoration:underline;margin-bottom:4px;font-size:10px;">Terms & Conditions</div>
+          <ol style="margin:0;padding-left:16px;">${termsHtml || '<li>—</li>'}</ol>
+        </div>
+        <div class="sign-box" style="padding:6px 8px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div class="sign-area" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:56px;">${sigHtml}</div>
+          <div class="sign-caption" style="text-align:center;font-size:9.5px;border-top:1px solid #000;padding-top:4px;"><b>Authorized Signatory</b>For ${escapeHtml(settings.name)}</div>
+        </div>
+      </div>
+      <div class="jurisdiction-bar" style="text-align:center;font-size:9.5px;font-weight:700;letter-spacing:.05em;border:1px solid #000;border-top:none;padding:4px;background:#f1f1f1;">SUBJECT TO VADODARA JURISDICTION</div>
+    </div>
+    `;
+
+    container.innerHTML = html;
+    container.getBoundingClientRect();
+
+    html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      width: container.scrollWidth,
+      height: container.scrollHeight,
+      windowWidth: container.scrollWidth,
+      windowHeight: container.scrollHeight,
+    }).then(canvas => {
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height / canvas.width) * pdfWidth;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const blob = pdf.output('blob');
+      container.remove();
+      resolve(blob);
+    }).catch(err => {
+      container.remove();
+      reject(err);
+    });
+  });
+}
+
+async function downloadPDFForInvoice(invoiceData) {
+  try {
+    toast('Generating PDF…');
+    const blob = await generatePDFBlob(invoiceData);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeInvno = (invoiceData.invno || 'export').replace(/\//g, '_');
+    a.href = url;
+    a.download = `Invoice_${safeInvno}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('PDF downloaded ✓');
+  } catch (e) {
+    console.error(e);
+    toast('PDF error: ' + e.message);
+  }
+}
+
+async function downloadCurrentPDF() {
+  const d = getFormData();
+  const t = computeTotals();
+  const data = { ...d, totals: t };
+  await downloadPDFForInvoice(data);
+}
+
+/* ---------------- EXPORT CSV ---------------- */
+function exportCSV() {
+  if (invoices.length === 0) {
+    toast('No invoices to export.');
+    return;
+  }
+  const headers = [
+    'Invoice No', 'Date', 'Mode', 'Vehicle', 'Origin', 'Destination',
+    'Consignor', 'Consignee', 'Receiver Name', 'Receiver Address',
+    'Receiver GSTIN', 'Receiver State', 'Receiver PIN',
+    'Subtotal', 'CGST', 'SGST', 'IGST', 'Round Off', 'Grand Total',
+    'Terms', 'Saved At'
+  ];
+
+  const csvRows = invoices.map(inv => {
+    const t = inv.totals || { subtotal:0, cgst:0, sgst:0, igst:0, roundOff:0, grandTotal:0 };
+    return [
+      inv.invno || '',
+      inv.date || '',
+      inv.mode || '',
+      inv.vehicle || '',
+      inv.origin || '',
+      inv.destination || '',
+      inv.consignor || '',
+      inv.consignee || '',
+      inv.rname || '',
+      inv.raddr || '',
+      inv.rgstin || '',
+      inv.rstate || '',
+      inv.rpin || '',
+      t.subtotal || 0,
+      t.cgst || 0,
+      t.sgst || 0,
+      t.igst || 0,
+      t.roundOff || 0,
+      t.grandTotal || 0,
+      (inv.terms || '').replace(/\n/g, ' '),
+      inv.savedAt || ''
+    ];
+  });
+
+  let csv = headers.join(',') + '\n';
+  csvRows.forEach(row => {
+    const quotedRow = row.map(field => {
+      if (typeof field === 'string' && (field.includes(',') || field.includes('"') || field.includes('\n'))) {
+        return `"${field.replace(/"/g, '""')}"`;
+      }
+      return field;
+    });
+    csv += quotedRow.join(',') + '\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', 'invoices_backup.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast('CSV exported ✓');
+}
+
+/* ---------------- INIT ---------------- */
 document.addEventListener('DOMContentLoaded', ()=>{
 
-  // nav
+  // Sidebar resize
+  initSidebarResize();
+
+  // Nav
   document.querySelectorAll('.nav-item').forEach(btn=>{
     btn.addEventListener('click', ()=> switchView(btn.dataset.view));
   });
   document.getElementById('newFromListBtn').addEventListener('click', ()=>{ resetForm(); switchView('editor'); });
 
-  // hamburger / mobile sidebar
+  // Hamburger
   document.getElementById('hamburgerBtn').addEventListener('click', openSidebarMobile);
   document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebarMobile);
 
-  // mobile preview toggle
+  // Mobile toggles
   document.getElementById('mobileShowForm').addEventListener('click', ()=>{
     document.getElementById('formPanelWrap').classList.remove('mobile-hide');
     document.getElementById('previewPanelWrap').classList.add('mobile-hide');
@@ -1311,18 +1828,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
     document.getElementById('previewPanelWrap').classList.remove('mobile-hide');
   });
 
-  // form live update
+  // Form live update (for totals and preview)
   const liveIds = ['f_invno','f_date','f_mode','f_vehicle','f_origin','f_destination',
                     'f_consignor','f_consignee','f_rname','f_raddr','f_rgstin','f_rstate','f_rpin','f_terms'];
   liveIds.forEach(id=>{
     const el = document.getElementById(id);
-    el.addEventListener('input', renderPreview);
+    el.addEventListener('input', ()=>{
+      renderPreview();
+      // also update totals? not needed because rows update triggers it
+    });
   });
 
   // rows
   document.getElementById('addRowBtn').addEventListener('click', ()=> addRow());
 
-  // signature tabs
+  // signature
   document.querySelectorAll('.sig-tab').forEach(t=>{
     t.addEventListener('click', ()=> setSigMode(t.dataset.sig));
   });
@@ -1343,9 +1863,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // save / print / reset
   document.getElementById('saveBtn').addEventListener('click', saveInvoice);
   document.getElementById('printBtn').addEventListener('click', ()=>{ saveInvoice(); window.print(); });
+  document.getElementById('pdfBtn').addEventListener('click', downloadCurrentPDF);
   document.getElementById('resetBtn').addEventListener('click', ()=>{
     if(confirm('Clear the current form? Unsaved changes will be lost.')) resetForm();
   });
+
+  // export CSV
+  document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
 
   // saved list
   document.getElementById('searchInput').addEventListener('input', (e)=> renderList(e.target.value));
@@ -1372,16 +1896,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
     renderPreview();
   });
 
+  // Zoom controls
+  document.getElementById('zoomInBtn').addEventListener('click', ()=> updateZoom(zoomLevel + 0.1));
+  document.getElementById('zoomOutBtn').addEventListener('click', ()=> updateZoom(zoomLevel - 0.1));
+  document.getElementById('zoomResetBtn').addEventListener('click', ()=> updateZoom(1));
+
   // initial state
   rows = [blankRow()];
   setVal('f_date', new Date().toISOString().slice(0,10));
   setVal('f_invno', genInvoiceNumber());
   renderRowsTable();
   setSigMode('draw');
-  currentSig = { mode:'none', dataUrl:'' }; // default to blank until user actually signs/uploads
+  currentSig = { mode:'none', dataUrl:'' };
   document.querySelectorAll('.sig-tab').forEach(t=>t.classList.toggle('active', t.dataset.sig==='draw'));
+  updateTotalsSummary();
   renderPreview();
   renderStats();
+  initZoom();  // load saved zoom
 });
 
 </script>
